@@ -17,20 +17,36 @@ class AuthController extends Controller
          * ==========1===========
          * Validasi data registrasi yang masuk
          */
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
 
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
 
         /**
          * =========2===========
          * Buat user baru dan generate token API, atur masa berlaku token 1 jam
          */
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+        ]);
 
-
+        $token = $user->createToken('auth_token', ['*'], now()->addHour())->plainTextToken;
 
         /**
          * =========3===========
          * Kembalikan response sukses dengan data $user dan $token
          */
-
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+        ], 201);
     }
 
 
@@ -40,17 +56,35 @@ class AuthController extends Controller
          * =========4===========
          * Validasi data login yang masuk
          */
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|string|email',
+            'password' => 'required|string',
+        ]);
 
         /**
          * =========5===========
          * Generate token API untuk user yang terautentikasi
          * Atur token agar expired dalam 1 jam
          */
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        if (!Auth::attempt($request->only('email', 'password'))) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $user = Auth::user();
+        $token = $user->createToken('auth_token', ['*'], now()->addHour())->plainTextToken;
 
         /**
          * =========6===========
          * Kembalikan response sukses dengan data $user dan $token
          */
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+        ], 200);
 
     }
 
@@ -60,12 +94,13 @@ class AuthController extends Controller
          * =========7===========
          * Invalidate token yang digunakan untuk autentikasi request saat ini
          */
-
+        $request->user()->currentAccessToken()->delete();
 
         /**
          * =========8===========
          * Kembalikan response sukses
          */
+        return response()->json(['message' => 'Successfully logged out'], 200);
 
     }
 }
